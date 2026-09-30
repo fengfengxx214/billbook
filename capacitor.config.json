@@ -1,0 +1,6 @@
+{
+  "appId": "com.yourname.billbook",
+  "appName": "账单小账本",
+  "webDir": "www",
+  "server": { "androidScheme": "https" }
+}
