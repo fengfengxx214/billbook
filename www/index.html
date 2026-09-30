@@ -65,6 +65,12 @@ li.r{display:flex;justify-content:space-between;align-items:center;gap:8px;paddi
     <div class="card">
       <div class="grid2">
         <div><label>月份</label><select id="fMonth"></select></div>
+        <div><label>收支</label><select id="fDir">
+          <option value="">全部收支</option>
+          <option value="支出">只看支出</option>
+          <option value="收入">只看收入</option>
+          <option value="不计收支">只看不计收支</option>
+        </select></div>
         <div><label>来源</label><select id="fSource"></select></div>
         <div><label>支付渠道</label><select id="fChannel"></select></div>
         <div><label>分类</label><select id="fCat"></select></div>
@@ -80,7 +86,7 @@ li.r{display:flex;justify-content:space-between;align-items:center;gap:8px;paddi
 
   <section id="tab-stats" class="hide">
     <div class="card">
-      <h2>概览 <span class="muted">（范围跟随「明细」页筛选）</span></h2>
+      <h2>概览 <span class="muted">（月份/渠道/分类跟随「明细」页筛选）</span></h2>
       <div class="grid2">
         <div><div class="muted">总支出</div><div class="kpi exp" id="kExp">0.00</div></div>
         <div><div class="muted">总收入</div><div class="kpi inc" id="kInc">0.00</div></div>
@@ -96,12 +102,12 @@ li.r{display:flex;justify-content:space-between;align-items:center;gap:8px;paddi
     <div class="card">
       <h2>导入账单</h2>
       <div class="drop" id="drop">把账单文件拖到这里（或点击选择）<br/>
-        <span class="muted">支持 微信 .xlsx / 支付宝 zip / 任何 .csv，可多选，自动去重</span>
+        <span class="muted">支持 微信 .xlsx / 支付宝 .csv 或 .zip / 任何 .csv，可多选，自动去重</span>
         <input type="file" id="file" accept=".xlsx,.csv,.txt,.zip" multiple class="hide"/>
       </div>
-      <div style="margin-top:8px"><label>或直接粘贴 CSV 文本</label><textarea id="pasteBox" placeholder="交易时间,交易类型,交易对方,商品,收/支,金额(元),支付方式,..."></textarea></div>
+      <div style="margin-top:8px"><label>或直接粘贴 CSV 文本</label><textarea id="pasteBox" placeholder="记录时间,分类,收支类型,金额,备注,账户,来源,标签&#10;..."></textarea></div>
       <div class="row" style="margin-top:8px"><button class="btn" id="btnPaste">导入粘贴内容</button><button class="btn ghost" id="btnDemo">生成示例数据试用</button></div>
-      <p class="muted" style="margin:10px 0 0">微信：我 → 服务 → 钱包 → 账单 → 常见问题 → 下载账单 → 用于个人对账（邮件附件 .xlsx，直接用它即可）。支付宝：我的 → 账单 → 右上角 … → 开具交易流水证明 / 导出（zip 可直接导入，无需解压）。</p>
+      <p class="muted" style="margin:10px 0 0">微信：我 → 服务 → 钱包 → 账单 → 常见问题 → 下载账单 → 用于个人对账（邮件附件 .xlsx）。支付宝：我的 → 账单 → 记账本 / 开具交易流水证明（.csv 或 zip，均可直接导入）。</p>
     </div>
 
     <div class="card">
@@ -115,7 +121,7 @@ li.r{display:flex;justify-content:space-between;align-items:center;gap:8px;paddi
       <div class="muted" id="memInfo"></div>
       <div class="row" style="margin-top:8px">
         <button class="btn ghost" id="btnExpJson">导出备份(JSON)</button>
-        <button class="btn ghost" id="btnExpCsv">导出明细(CSV)</button>
+        <button class="btn ghost" id="btnExpCsv">导出当前筛选明细(CSV)</button>
         <button class="btn danger" id="btnClearMem">清空商户记忆</button>
         <button class="btn danger" id="btnClearAll">清空全部数据</button>
       </div>
@@ -128,30 +134,61 @@ li.r{display:flex;justify-content:space-between;align-items:center;gap:8px;paddi
 /* ============ 基础配置 ============ */
 const LS = 'billbook_v1';
 const PAGE = 50;
-const CATS = ['餐饮','交通','购物','数码','居住','生活缴费','通讯','娱乐','医疗','教育','人情往来','旅行','宠物','转账','其他'];
+const CATS = ['餐饮','交通','购物','数码','居住','生活缴费','通讯','娱乐','医疗','教育','人情往来','旅行','宠物','转账','退款','其他'];
 const CHANNELS = ['零钱/余额','银行卡','亲情卡','信用支付','其他'];
 
 const DEFAULT_RULES = [
- {cat:'餐饮', kw:['美团','饿了么','外卖','餐饮','美食','餐厅','饭店','小吃','快餐','食堂','咖啡','星巴克','瑞幸','蜜雪','喜茶','奈雪','奶茶','烘焙','面包','蛋糕','火锅','烧烤','烤肉','肯德基','麦当劳','汉堡','披萨','米线','面馆','麻辣烫','早点']},
+ {cat:'餐饮', kw:['美团','饿了么','外卖','餐饮','饮食','美食','餐厅','饭店','食堂','小吃','快餐','咖啡','星巴克','瑞幸','蜜雪','喜茶','奈雪','奶茶','烘焙','面包','蛋糕','火锅','烧烤','烤肉','肯德基','麦当劳','汉堡','披萨','米线','面馆','麻辣烫','早点']},
  {cat:'交通', kw:['滴滴','花小猪','T3出行','高德','出行','打车','出租车','地铁','公交','加油','中国石化','中国石油','停车','高速','ETC','火车票','铁路','12306','航空','机票','哈啰','青桔','单车','车费']},
  {cat:'购物', kw:['淘宝','天猫','京东','拼多多','唯品会','苏宁','抖音商城','得物','超市','便利店','沃尔玛','永辉','盒马','罗森','全家','711','7-11','商场','百货','优衣库','服饰','鞋','宜家','名创优品']},
- {cat:'数码', kw:['小米','华为','苹果','Apple','京东电器','数码','电脑','手机','耳机','充电器','相机']},
+ {cat:'数码', kw:['小米','华为','苹果','Apple','京东电器','数码','电脑','耳机','充电器','充电宝','相机']},
  {cat:'居住', kw:['房租','租金','房东','物业','中介','贝壳','公寓','装修','建材','家电维修','家具']},
- {cat:'生活缴费', kw:['缴费','电费','水费','燃气','取暖','宽带','有线电视','自来水','国家电网','物业费']},
+ {cat:'生活缴费', kw:['缴费','电费','水费','燃气','取暖','宽带','有线电视','自来水','国家电网','物业费','洗衣','热水']},
  {cat:'通讯', kw:['话费','流量','中国移动','中国联通','中国电信','移动通信','手机充值']},
  {cat:'娱乐', kw:['电影','影城','猫眼','淘票票','游戏','腾讯视频','爱奇艺','优酷','芒果TV','哔哩哔哩','网易云音乐','QQ音乐','KTV','剧本杀','密室','会员','订阅','演唱会','健身房','游泳','Steam']},
  {cat:'医疗', kw:['医院','药店','药房','诊所','挂号','门诊','体检','医保','医疗','口腔','牙科','眼科']},
- {cat:'教育', kw:['学费','培训','课程','教育','学校','图书','书店','文具','考试','报名费','驾校']},
+ {cat:'教育', kw:['学费','培训','课程','教育','学校','图书','书店','文具','考试','报名费','驾校','API']},
  {cat:'人情往来', kw:['红包','礼金','份子','随礼','孝敬','亲属卡']},
  {cat:'旅行', kw:['酒店','宾馆','民宿','携程','去哪儿','飞猪','同程','旅游','度假','景区']},
  {cat:'宠物', kw:['宠物','猫粮','狗粮','猫砂','铲屎']},
  {cat:'转账', kw:['转账','提现','群收款','信用卡还款','零钱通']}
 ];
 const WX_TYPE = {'微信红包':'人情往来','转账':'转账','群收款':'转账','手机充值':'通讯','生活缴费':'生活缴费','信用卡还款':'转账','零钱提现':'转账','二维码收款':'转账'};
-const ALI_CAT = {'餐饮美食':'餐饮','交通出行':'交通','服饰装扮':'购物','日用百货':'购物','数码电器':'数码','文化休闲':'娱乐','医疗健康':'医疗','住房物业':'居住','充值缴费':'生活缴费','通讯物流':'通讯','母婴亲子':'购物','美容美发':'购物','生活服务':'生活缴费','酒店旅游':'旅行','运动户外':'购物','教育培训':'教育','宠物':'宠物','转账':'转账','红包':'人情往来','亲友代付':'人情往来','投资理财':'转账','保险':'其他','信用借还':'转账'};
+const ALI_CAT = {'餐饮':'餐饮','餐饮美食':'餐饮','交通出行':'交通','交通':'交通','服饰装扮':'购物','日用百货':'购物','数码电器':'数码','文化休闲':'娱乐','医疗健康':'医疗','住房物业':'居住','充值缴费':'生活缴费','通讯物流':'通讯','生活服务':'生活缴费','母婴亲子':'购物','美容美发':'购物','酒店旅游':'旅行','运动户外':'购物','教育培训':'教育','学习':'教育','宠物':'宠物','转账':'转账','红包':'人情往来','亲友代付':'人情往来','投资理财':'转账','保险':'其他','信用借还':'转账','退款':'退款'};
 
+/* 按表头中文名自动判断每列用途，兼容各版本导出格式 */
+function inferCols(h){
+  const c = { time:-1, dir:-1, amt:-1, cat:-1, title:-1, desc:-1, pay:-1, st:-1, ord:-1, note:-1 };
+  const set = (k,i) => { if(c[k] < 0) c[k] = i; };
+  h.forEach((raw,i)=>{
+    const s = String(raw==null?'':raw).replace(/\s/g,'');
+    if(!s) return;
+    if(/备注/.test(s)){ set('note',i); set('desc',i); return; }
+    if(/(收\/?付款方式|支付方式|付款方式|扣款方式|账户|渠道|资金来源|支付渠道)/.test(s)) return set('pay',i);
+    if(/(收\/?支|收支类型|资金方向|借贷标志)/.test(s)) return set('dir',i);
+    if(/(交易时间|记录时间|付款时间|创建时间|交易日期|时间|日期)/.test(s)) return set('time',i);
+    if(/金额/.test(s)) return set('amt',i);
+    if(/(交易对方|对方|商户|商家|名称)/.test(s)) return set('title',i);
+    if(/(商品|说明|摘要|内容|用途)/.test(s)) return set('desc',i);
+    if(/状态/.test(s)) return set('st',i);
+    if(/(单号|订单号|流水号)/.test(s)) return set('ord',i);
+    if(/(分类|类型|类目)/.test(s)) return set('cat',i);
+  });
+  return c;
+}
+/* 把“备注”里的一长串清洗成可读的商户名 */
+function cleanTitle(raw){
+  let t = String(raw==null?'':raw).replace(/\s+/g,' ').trim();
+  t = t.replace(/-\d{4}-\d{2}-\d{2}(\s*\d{2}:\d{2}(:\d{2})?)?.*$/,'');
+  t = t.replace(/-\d{10,}.*$/,'');
+  t = t.replace(/(商家收钱|商家收款|商家订单|扫码点餐付款|付款成功|已收款)$/,'');
+  t = t.replace(/^(退款-|扫码钱付-|扫码付款-|二维码付款-|支付宝-)/,'');
+  return t.trim() || String(raw==null?'':raw).trim();
+}
+
+/* ============ 状态 ============ */
 let state = { tx:[], rules:[], merchantMap:{}, payMap:{} };
-let F = { month:'', source:'', channel:'', cat:'', kw:'' };
+let F = { month:'', source:'', channel:'', cat:'', dir:'', kw:'' };
 let page = 1;
 
 const $ = s => document.querySelector(s);
@@ -169,7 +206,7 @@ function save(){
   catch(e){ alert('本地存储写入失败（空间可能不足），请先导出备份再清理数据。'); }
 }
 
-/* ============ 文本编码自适应 ============ */
+/* ============ 文本编码自适应（UTF-8 / GBK） ============ */
 function decodeBytes(u8){
   const cnt = s => (s.match(/\uFFFD/g)||[]).length;
   let utf8 = '';
@@ -279,17 +316,17 @@ async function readXlsx(buf){
 /* ============ CSV 解析 ============ */
 function parseCSV(text){
   text = text.replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n');
-  const rows=[]; let row=[], f='', inQ=false;
-  for(let i=0;i<text.length;i++){
-    const c=text[i];
+  const rows = []; let row = [], f = '', inQ = false;
+  for(let i = 0; i < text.length; i++){
+    const c = text[i];
     if(inQ){
-      if(c==='"'){ if(text[i+1]==='"'){ f+='"'; i++; } else inQ=false; }
-      else f+=c;
+      if(c === '"'){ if(text[i+1] === '"'){ f += '"'; i++; } else inQ = false; }
+      else f += c;
     }else{
-      if(c==='"') inQ=true;
-      else if(c===','){ row.push(f); f=''; }
-      else if(c==='\n'){ row.push(f); rows.push(row); row=[]; f=''; }
-      else f+=c;
+      if(c === '"') inQ = true;
+      else if(c === ','){ row.push(f); f = ''; }
+      else if(c === '\n'){ row.push(f); rows.push(row); row = []; f = ''; }
+      else f += c;
     }
   }
   row.push(f); rows.push(row);
@@ -303,13 +340,11 @@ async function readAnyFile(file){
   const isZip = u8[0] === 0x50 && u8[1] === 0x4B;
   if(isZip || /\.xlsx$/i.test(file.name||'')){
     const zip = readZipEntries(buf);
-    // 支付宝导出：zip 里装的是 CSV（GBK）
     const csvName = Object.keys(zip.entries).find(n => /\.(csv|txt)$/i.test(n));
     if(csvName){
       const bytes = await zipReadBytes(zip, csvName);
       return { kind:'zip/csv', rows: parseCSV(decodeBytes(bytes)) };
     }
-    // 微信导出：xlsx（zip 里是 XML）
     return { kind:'xlsx', rows: await readXlsx(buf) };
   }
   return { kind:'csv', rows: parseCSV(decodeBytes(u8)) };
@@ -334,10 +369,11 @@ function parseAmount(s){
 }
 function normDir(s){
   const t = String(s==null?'':s).trim();
-  if(t.includes('支出')) return '支出';
-  if(t.includes('收入')) return '收入';
   if(t.includes('不计')) return '不计收支';
-  return t || '支出';
+  if(t === '/' || t === '-' || t === '') return '支出';
+  if(t.includes('支')) return '支出';
+  if(t.includes('收')) return '收入';
+  return t;
 }
 function classifyChannel(raw){
   const s = String(raw==null?'':raw).replace(/\s/g,'');
@@ -354,7 +390,7 @@ function classifyCategory(t){
   for(const r of state.rules.concat(DEFAULT_RULES)) if(r.kw.some(k => k && text.includes(k))) return r.cat;
   if(ALI_CAT[t.rawType]) return ALI_CAT[t.rawType];
   if(WX_TYPE[t.rawType]) return WX_TYPE[t.rawType];
-  if(t.direction !== '支出') return '转账';
+  if(t.direction === '收入') return '转账';
   return '其他';
 }
 function applyLearn(){
@@ -363,50 +399,50 @@ function applyLearn(){
     if(!t.catManual) t.cat = classifyCategory(t);
   });
 }
-const txKey = t => t.orderNo ? t.source+'|'+t.orderNo : [t.source,t.time,t.title,t.amount,t.direction].join('|');
+const txKey = t => t.orderNo ? t.source + '|' + t.orderNo : [t.source, t.time, t.title, t.amount, t.direction].join('|');
 
-/* ============ 导入：二维数组 → 记录 ============ */
+/* ============ 表头定位 + 行 → 记录 ============ */
 function findHeader(rows){
-  for(let i=0;i<Math.min(rows.length,60);i++){
-    const j = rows[i].map(x => String(x==null?'':x).trim()).join(',');
-    if(/交易时间|付款时间|交易日期|交易创建时间/.test(j) && /金额/.test(j)) return i;
+  let best = -1, bestScore = 0;
+  for(let i = 0; i < Math.min(rows.length, 60); i++){
+    const cells = rows[i].map(x => String(x==null?'':x).trim());
+    if(cells.length < 4) continue;
+    let score = 0;
+    cells.forEach(c=>{
+      if(!c || c.length > 12) return;
+      if(/^(交易时间|记录时间|付款时间|交易创建时间|交易日期|时间|日期)$/.test(c)) score += 3;
+      else if(/^金额(（?元）?|\(元\))?$/.test(c)) score += 3;
+      else if(/(收\/支|收支类型|收支|资金方向)/.test(c)) score += 2;
+      else if(/(交易对方|对方|商户|商品|说明|备注|分类|类型|账户|方式|渠道|状态|单号|标签|来源)/.test(c)) score += 1;
+    });
+    if(score > bestScore){ bestScore = score; best = i; }
   }
-  return -1;
+  return bestScore >= 6 ? best : -1;
 }
 function importRows(rows){
   const hi = findHeader(rows);
-  if(hi < 0) throw new Error('没找到表头（需要同时有“交易时间”和“金额”列）。如果这份导出格式又变了，把前 20 行发我。');
+  if(hi < 0) throw new Error('没找到表头。请把文件前 20 行原文发我，我按这份格式再适配一次。');
   const h = rows[hi].map(x => String(x==null?'':x).replace(/\s/g,''));
+  const idx = inferCols(h);
+  if(idx.time < 0 || idx.amt < 0) throw new Error('找不到“时间”或“金额”列，表头是：' + h.join(' | '));
   const head = rows.slice(0, Math.min(rows.length, 30)).map(r => r.join(',')).join('\n');
   const source = head.includes('微信') ? '微信' : (head.includes('支付宝') ? '支付宝' : (h.some(x=>x.includes('收/付款方式')) ? '支付宝' : '其他'));
-  const idx = {
-    time:  colIdx(h,['交易时间','付款时间','交易创建时间']),
-    type:  colIdx(h,['交易分类','交易类型']),
-    title: colIdx(h,['交易对方','对方','商户名称','商户']),
-    prod:  colIdx(h,['商品说明','商品名称','商品']),
-    dir:   colIdx(h,['收/支','收支']),
-    amt:   colIdx(h,['金额']),
-    pay:   colIdx(h,['收/付款方式','支付方式','付款方式']),
-    st:    colIdx(h,['交易状态','当前状态']),
-    ord:   colIdx(h,['交易订单号','交易单号','交易号']),
-    ord2:  colIdx(h,['商家订单号','商户单号']),
-    note:  colIdx(h,['备注'])
-  };
   const out = [];
-  for(let r = hi+1; r < rows.length; r++){
+  for(let r = hi + 1; r < rows.length; r++){
     const row = rows[r];
     if(!row) continue;
-    const g = i => (i>=0 && row[i]!=null) ? String(row[i]).trim() : '';
-    if(/^(共|合计|总计|以上)/.test(g(0))) continue;
+    const g = i => (i >= 0 && row[i] != null) ? String(row[i]).trim() : '';
+    if(/^(共|合计|总计|以上|温馨提示)/.test(g(0))) continue;
     const time = normTime(g(idx.time));
     if(!time) continue;
-    const title = g(idx.title) || g(idx.prod) || '未知';
+    const rawTitle = g(idx.title), rawDesc = g(idx.desc);
+    const title = cleanTitle(rawTitle || rawDesc || '未知');
     const t = {
       id:'', source, time, month: time.slice(0,7), date: time.slice(0,10),
-      title, product: g(idx.prod), rawType: g(idx.type),
+      title, product: rawTitle ? rawDesc : '', rawType: g(idx.cat),
       direction: normDir(g(idx.dir)), amount: parseAmount(g(idx.amt)),
       payRaw: g(idx.pay), channel:'', cat:'',
-      status: g(idx.st), orderNo: g(idx.ord) || g(idx.ord2), note: g(idx.note),
+      status: g(idx.st), orderNo: g(idx.ord), note: g(idx.note),
       catManual:false, chManual:false
     };
     t.channel = state.payMap[t.payRaw] || classifyChannel(t.payRaw);
@@ -415,7 +451,6 @@ function importRows(rows){
   }
   return { source, txs: out };
 }
-const colIdx = (h, names) => { for(const n of names){ const i = h.findIndex(x => x.includes(n)); if(i>=0) return i; } return -1; };
 
 /* ============ 导入执行 ============ */
 function addTxs(txs){
@@ -433,7 +468,7 @@ async function handleFiles(files){
   for(const f of files){
     try{
       const res = await readAnyFile(f);
-      const r = addTxs(res.rows.length ? importRows(res.rows).txs : []);
+      const r = addTxs(importRows(res.rows).txs);
       added += r.added; dup += r.dup;
     }catch(e){ fail.push(f.name + '：' + e.message); }
   }
@@ -442,15 +477,16 @@ async function handleFiles(files){
 }
 
 /* ============ 筛选与渲染 ============ */
-function filtered(){
+function filtered(ignoreDir){
   return state.tx.filter(t=>{
     if(F.month && t.month !== F.month) return false;
     if(F.source && t.source !== F.source) return false;
     if(F.channel && t.channel !== F.channel) return false;
     if(F.cat && t.cat !== F.cat) return false;
+    if(!ignoreDir && F.dir && t.direction !== F.dir) return false;
     if(F.kw){
       const k = F.kw.toLowerCase();
-      if(!(t.title+' '+t.product+' '+t.note).toLowerCase().includes(k)) return false;
+      if(!(t.title + ' ' + t.product + ' ' + t.note).toLowerCase().includes(k)) return false;
     }
     return true;
   }).sort((a,b) => b.time.localeCompare(a.time));
@@ -461,8 +497,9 @@ function renderFilters(){
   $('#fMonth').innerHTML = opts(months, F.month, '全部月份');
   $('#fSource').innerHTML = opts([...new Set(state.tx.map(t=>t.source))].sort(), F.source, '全部来源');
   $('#fChannel').innerHTML = opts(CHANNELS, F.channel, '全部渠道');
-  const catList = [...new Set(state.tx.map(t=>t.cat))].sort((a,b)=>CATS.indexOf(a)-CATS.indexOf(b));
+  const catList = [...new Set(state.tx.map(t=>t.cat))].sort((a,b) => CATS.indexOf(a) - CATS.indexOf(b));
   $('#fCat').innerHTML = opts(catList, F.cat, '全部分类');
+  $('#fDir').value = F.dir;
   $('#rCat').innerHTML = CATS.map(c=>`<option>${c}</option>`).join('');
 }
 function txHtml(t){
@@ -495,19 +532,21 @@ function renderList(){
   $('#countInfo').textContent = `${list.length} 笔｜支出 ${money(exp)}｜收入 ${money(inc)}`;
 }
 function bars(obj){
-  const ents = Object.entries(obj).sort((a,b)=>b[1]-a[1]);
-  const total = ents.reduce((s,x)=>s+x[1],0) || 1;
-  if(!ents.length) return '<p class="muted" style="margin:0">暂无支出</p>';
+  const ents = Object.entries(obj).sort((a,b) => b[1]-a[1]);
+  const total = ents.reduce((s,x) => s + x[1], 0) || 1;
+  if(!ents.length) return '<p class="muted" style="margin:0">暂无数据</p>';
   return ents.map(([k,v],i)=>`
     <div class="legend"><span>${esc(k)}</span><span>${money(v)}（${(v/total*100).toFixed(1)}%）</span></div>
-    <div class="bar ${'c'+((i%4)+1)}"><i style="width:${Math.max(2,v/total*100)}%"></i></div>`).join('');
+    <div class="bar ${'c'+((i%4)+1)}"><i style="width:${Math.max(2, v/total*100)}%"></i></div>`).join('');
 }
 function renderStats(){
-  const list = filtered(), exp = list.filter(t=>t.direction==='支出'), inc = list.filter(t=>t.direction==='收入');
-  const sum = a => a.reduce((s,t)=>s+t.amount,0);
+  const list = filtered(true);
+  const exp = list.filter(t=>t.direction==='支出'), inc = list.filter(t=>t.direction==='收入');
+  const sum = a => a.reduce((s,t) => s + t.amount, 0);
   $('#kExp').textContent = money(sum(exp));
   $('#kInc').textContent = money(sum(inc));
-  $('#kSub').textContent = `支出 ${exp.length} 笔，收入 ${inc.length} 笔，净支出 ${money(sum(exp)-sum(inc))}｜覆盖 ${new Set(exp.map(t=>t.date)).size} 天，日均 ${money(sum(exp)/Math.max(1,new Set(exp.map(t=>t.date)).size))}`;
+  const days = new Set(exp.map(t=>t.date)).size;
+  $('#kSub').textContent = `支出 ${exp.length} 笔，收入 ${inc.length} 笔，净支出 ${money(sum(exp)-sum(inc))}｜覆盖 ${days} 天，日均 ${money(sum(exp)/Math.max(1,days))}`;
   const group = (arr, key) => arr.reduce((o,t)=>{ o[t[key]] = (o[t[key]]||0) + t.amount; return o; }, {});
   $('#catChart').innerHTML = bars(group(exp,'cat'));
   $('#chChart').innerHTML = bars(group(exp,'channel'));
@@ -518,25 +557,29 @@ function renderRules(){
   ul.innerHTML = state.rules.length
     ? '<li class="muted" style="border:0">自定义规则优先于内置规则</li>' + state.rules.map((r,i)=>`<li class="r"><span><b>${esc(r.cat)}</b> ← ${esc(r.kw.join('、'))}</span><button class="btn danger mini" data-ri="${i}" style="padding:2px 8px;font-size:12px">删除</button></li>`).join('')
     : '<li class="muted" style="border:0">还没有自定义规则（内置规则已覆盖常见商户）</li>';
-  const n = Object.keys(state.merchantMap).length;
-  $('#memInfo').textContent = `已记住 ${n} 个商户的分类；已记住 ${Object.keys(state.payMap).length} 个支付方式的渠道。修改某笔的分类/渠道后会自动记住并应用到同类记录。`;
+  $('#memInfo').textContent = `已记住 ${Object.keys(state.merchantMap).length} 个商户的分类；已记住 ${Object.keys(state.payMap).length} 个支付方式的渠道。修改某笔的分类/渠道后会自动记住并应用到同类记录。`;
 }
 function renderAll(){ renderFilters(); renderList(); renderStats(); renderRules(); }
 function refresh(){ save(); renderAll(); }
 
 /* ============ 事件绑定 ============ */
-document.querySelectorAll('.tabs button').forEach(b=>b.onclick = ()=>{
-  document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on', x===b));
-  ['list','stats','data'].forEach(t=>$('#tab-'+t).classList.toggle('hide', t!==b.dataset.tab));
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = ()=>{
+  document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
+  ['list','stats','data'].forEach(t => $('#tab-'+t).classList.toggle('hide', t !== b.dataset.tab));
 });
-['fMonth','fSource','fChannel','fCat'].forEach(id=>$('#'+id).onchange = e=>{ F[id.slice(1).toLowerCase()] = e.target.value; page=1; renderList(); renderStats(); });
-$('#fKw').oninput = e=>{ F.kw = e.target.value.trim(); page=1; renderList(); };
-$('#btnReset').onclick = ()=>{ F = {month:'',source:'',channel:'',cat:'',kw:''}; $('#fKw').value=''; page=1; renderAll(); };
+['fMonth','fSource','fChannel','fCat','fDir'].forEach(id => $('#'+id).onchange = e=>{
+  F[id.slice(1).toLowerCase()] = e.target.value; page = 1; renderList(); renderStats();
+});
+$('#fKw').oninput = e=>{ F.kw = e.target.value.trim(); page = 1; renderList(); };
+$('#btnReset').onclick = ()=>{
+  F = { month:'', source:'', channel:'', cat:'', dir:'', kw:'' };
+  $('#fKw').value = ''; $('#fDir').value = ''; page = 1; renderAll();
+};
 $('#btnMore').onclick = ()=>{ page++; renderList(); };
 
 $('#listBox').addEventListener('change', e=>{
   const box = e.target.closest('.tx'); if(!box) return;
-  const t = state.tx.find(x=>x.id===box.dataset.id); if(!t) return;
+  const t = state.tx.find(x => x.id === box.dataset.id); if(!t) return;
   if(e.target.classList.contains('catSel')){
     t.cat = e.target.value; t.catManual = true;
     state.merchantMap[t.title] = t.cat;
@@ -551,7 +594,7 @@ $('#listBox').addEventListener('click', e=>{
   const b = e.target.closest('button[data-act="del"]'); if(!b) return;
   const box = e.target.closest('.tx');
   if(!confirm('删除这一笔记录？')) return;
-  state.tx = state.tx.filter(x=>x.id!==box.dataset.id);
+  state.tx = state.tx.filter(x => x.id !== box.dataset.id);
   save(); renderAll();
 });
 
@@ -560,27 +603,27 @@ drop.onclick = ()=>file.click();
 drop.addEventListener('dragover', e=>{ e.preventDefault(); drop.classList.add('on'); });
 drop.addEventListener('dragleave', ()=>drop.classList.remove('on'));
 drop.addEventListener('drop', e=>{ e.preventDefault(); drop.classList.remove('on'); handleFiles(e.dataTransfer.files); });
-file.onchange = e=>{ if(e.target.files.length) handleFiles(e.target.files); e.target.value=''; };
+file.onchange = e=>{ if(e.target.files.length) handleFiles(e.target.files); e.target.value = ''; };
 
 $('#btnPaste').onclick = ()=>{
   const t = $('#pasteBox').value.trim();
   if(!t) return alert('请先粘贴内容');
   try{
     const r = addTxs(importRows(parseCSV(t)).txs);
-    $('#pasteBox').value=''; refresh();
+    $('#pasteBox').value = ''; refresh();
     alert(`导入完成：新增 ${r.added} 笔，跳过重复 ${r.dup} 笔`);
-  }catch(err){ alert('导入失败：'+err.message); }
+  }catch(err){ alert('导入失败：' + err.message); }
 };
 
 $('#btnAddRule').onclick = ()=>{
-  const kw = $('#rKw').value.split(/[,，\s]+/).map(s=>s.trim()).filter(Boolean);
+  const kw = $('#rKw').value.split(/[,，\s]+/).map(s => s.trim()).filter(Boolean);
   if(!kw.length) return alert('请输入至少一个关键词');
   state.rules.unshift({ cat: $('#rCat').value, kw });
   $('#rKw').value = ''; applyLearn(); refresh();
 };
 $('#ruleList').addEventListener('click', e=>{
   const b = e.target.closest('button[data-ri]'); if(!b) return;
-  state.rules.splice(+b.dataset.ri,1); applyLearn(); refresh();
+  state.rules.splice(+b.dataset.ri, 1); applyLearn(); refresh();
 });
 $('#btnClearMem').onclick = ()=>{
   if(!confirm('清空商户记忆和支付方式记忆？（记录本身保留）')) return;
@@ -589,19 +632,20 @@ $('#btnClearMem').onclick = ()=>{
 $('#btnClearAll').onclick = ()=>{
   if(!confirm('确定清空全部账目？建议先导出备份。')) return;
   state = { tx:[], rules:[], merchantMap:{}, payMap:{} };
-  F = {month:'',source:'',channel:'',cat:'',kw:''}; refresh();
+  F = { month:'', source:'', channel:'', cat:'', dir:'', kw:'' };
+  $('#fDir').value = ''; refresh();
 };
 function download(name, text, type){
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(['\uFEFF'+text], {type: type||'text/csv;charset=utf-8'}));
+  a.href = URL.createObjectURL(new Blob(['\uFEFF'+text], { type: type || 'text/csv;charset=utf-8' }));
   a.download = name; a.click(); URL.revokeObjectURL(a.href);
 }
-$('#btnExpJson').onclick = ()=> download('账单备份_'+new Date().toISOString().slice(0,10)+'.json', JSON.stringify(state), 'application/json');
+$('#btnExpJson').onclick = ()=> download('账单备份_' + new Date().toISOString().slice(0,10) + '.json', JSON.stringify(state), 'application/json');
 $('#btnExpCsv').onclick = ()=>{
   const head = ['来源','交易时间','交易对方','商品说明','收支','金额','支付方式原文','渠道','分类','状态','交易单号','备注'];
-  const rows = filtered().map(t=>[t.source,t.time,t.title,t.product,t.direction,t.amount,t.payRaw,t.channel,t.cat,t.status,t.orderNo,t.note]
-    .map(v=>`"${String(v==null?'':v).replace(/"/g,'""')}"`).join(','));
-  download('账单明细_'+new Date().toISOString().slice(0,10)+'.csv', [head.join(','), ...rows].join('\n'));
+  const rows = filtered().map(t => [t.source,t.time,t.title,t.product,t.direction,t.amount,t.payRaw,t.channel,t.cat,t.status,t.orderNo,t.note]
+    .map(v => `"${String(v==null?'':v).replace(/"/g,'""')}"`).join(','));
+  download('账单明细_' + new Date().toISOString().slice(0,10) + '.csv', [head.join(','), ...rows].join('\n'));
 };
 $('#fileJson').onchange = async e=>{
   const f = e.target.files[0]; if(!f) return;
@@ -610,9 +654,9 @@ $('#fileJson').onchange = async e=>{
     if(!Array.isArray(d.tx)) throw new Error('格式不正确');
     if(!confirm('恢复备份会覆盖当前数据，继续？')) return;
     state = { tx:d.tx||[], rules:d.rules||[], merchantMap:d.merchantMap||{}, payMap:d.payMap||{} };
-    applyLearn(); refresh(); alert('已恢复 '+state.tx.length+' 笔记录');
-  }catch(err){ alert('恢复失败：'+err.message); }
-  e.target.value='';
+    applyLearn(); refresh(); alert('已恢复 ' + state.tx.length + ' 笔记录');
+  }catch(err){ alert('恢复失败：' + err.message); }
+  e.target.value = '';
 };
 
 $('#btnDemo').onclick = ()=>{
@@ -629,17 +673,19 @@ $('#btnDemo').onclick = ()=>{
     ['支付宝','2026-09-20 10:00','转账-李四','','支出',500,'余额宝'],
     ['微信','2026-09-25 22:30','张三','收到转账','收入',200,'零钱']
   ];
-  const txs = demo.map(d=>{
+  const keys = new Set(state.tx.map(txKey));
+  let added = 0;
+  demo.forEach(d=>{
     const t = { id:'', source:d[0], time:d[1], month:d[1].slice(0,7), date:d[1].slice(0,10),
       title:d[2], product:d[3], rawType:'', direction:d[4], amount:d[5], payRaw:d[6], channel:'', cat:'',
       status:'支付成功', orderNo:'', note:'', catManual:false, chManual:false };
+    if(keys.has(txKey(t))) return;
     t.channel = state.payMap[t.payRaw] || classifyChannel(t.payRaw);
     t.cat = classifyCategory(t);
-    return t;
+    t.id = uid(); state.tx.push(t); added++;
   });
-  const r = addTxs(txs);
   refresh();
-  alert(`已加入示例数据 ${r.added} 笔`);
+  alert(`已加入示例数据 ${added} 笔`);
 };
 
 /* ============ 启动 ============ */
